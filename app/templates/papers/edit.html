@@ -1,0 +1,526 @@
+{% extends 'base.html' %}
+{% block title %}试卷编辑{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title" id="pageTitle">新建试卷</h1>
+        <div class="page-sub">智能组卷 · 一键盲换 · 同类推荐 · 小问分值一键平均 · 版本控制</div>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" onclick="showVersions()"><i class="bi bi-clock-history"></i> 历史版本</button>
+        <button class="btn btn-outline-info" onclick="renumber()"><i class="bi bi-list-ol"></i> 题号重排</button>
+        <button class="btn btn-primary" onclick="savePaper()" data-shortcut="save"><i class="bi bi-save"></i> 保存（Ctrl+Enter）</button>
+    </div>
+</div>
+
+<input type="hidden" id="pid" value="{{pid or ''}}">
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <label class="form-label">试卷标题</label>
+        <input type="text" id="paperTitle" class="form-control" value="浙江省信息技术试卷">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">模式</label>
+        <select id="paperMode" class="form-select">
+            <option value="xuekao">学考卷（50分）</option>
+            <option value="xuankao">选考卷（50分）</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">总分</label>
+        <input type="number" id="paperTotalScore" class="form-control" value="50">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">密封线</label>
+        <select id="paperSealLine" class="form-select">
+            <option value="1">有</option>
+            <option value="0">无</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">页眉文字</label>
+        <input type="text" id="paperHeader" class="form-control" placeholder="如：2024年6月浙江省普通高中信息技术学考">
+    </div>
+</div>
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <label class="form-label">页脚文字（留空则显示页码）</label>
+        <input type="text" id="paperFooter" class="form-control">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">考生信息区文字</label>
+        <input type="text" id="paperStudentInfo" class="form-control" value="姓名：____________   班级：____________   学号：____________   考号：____________">
+    </div>
+</div>
+
+<!-- 智能组卷 -->
+<div class="card mb-3">
+    <div class="card-header">
+        智能组卷
+        <span class="text-muted small">基于预设模板按难度/知识点抽题</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">选择模板</label>
+                <select id="templateSelect" class="form-select">
+                    <option value="xuekao">学考卷（50分：单选10题+非选2题）</option>
+                    <option value="xuankao">选考卷（50分：单选12题+非选3题）</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">目标难度</label>
+                <select id="targetDiff" class="form-select">
+                    <option value="3">★★★☆☆ 中等</option>
+                    <option value="2">★★☆☆☆ 偏易</option>
+                    <option value="4">★★★★☆ 偏难</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">限定知识点</label>
+                <select id="targetKp" class="form-select">
+                    <option value="">不限</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-success w-100" onclick="autoAssemble()"><i class="bi bi-magic"></i> 一键智能组卷</button>
+            </div>
+        </div>
+        <div class="alert alert-warning mt-3 mb-0 small">
+            <i class="bi bi-info-circle"></i> 智能组卷将清空当前试卷内容并重新抽题。请先保存当前试卷或确认无误。
+        </div>
+    </div>
+</div>
+
+<!-- 试卷题目结构 -->
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+        <span>试卷题目</span>
+        <div class="d-flex gap-2">
+            <span class="text-muted small" id="scoreCheck">实际总分：0 / 目标：50</span>
+            <button class="btn btn-sm btn-outline-primary" onclick="addQuestion()"><i class="bi bi-plus"></i> 手动添加题目</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="paperStructure">
+            <div class="text-center text-muted py-4">暂无题目，请使用智能组卷或手动添加</div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加题目弹窗 -->
+<div class="modal fade" id="addQModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">添加题目到试卷</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="toolbar mb-3">
+            <input type="text" id="addQKw" class="form-control" placeholder="搜索题干" oninput="searchAddQ()">
+            <select id="addQType" class="form-select" onchange="searchAddQ()">
+                <option value="">全部题型</option>
+                <option value="single_choice">单选题</option>
+                <option value="python_read">Python阅读题</option>
+                <option value="python_fill">Python代码填空题</option>
+                <option value="flowchart">流程图分析题</option>
+                <option value="flask_fill">Flask代码填空题</option>
+                <option value="pandas">Pandas数据处理题</option>
+                <option value="binary_tree">二叉树操作题</option>
+                <option value="linked_list">链表操作题</option>
+            </select>
+        </div>
+        <div id="addQList" style="max-height:500px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 同类题推荐弹窗 -->
+<div class="modal fade" id="similarModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">同类题推荐</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted">已按"同知识点 > 同难度 > 同类型"优先级排序</p>
+        <div id="similarList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 历史版本弹窗 -->
+<div class="modal fade" id="versionModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">历史版本</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div id="versionList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pid = document.getElementById('pid').value;
+let paperData = {questions: []};
+let currentPqId = null;  // 用于同类题推荐
+
+async function loadKpOptions() {
+    const tree = await api('/api/kp/tree');
+    const sel = document.getElementById('targetKp');
+    function walk(nodes, depth=0) {
+        for (const n of nodes) {
+            const opt = document.createElement('option');
+            opt.value = n.id;
+            opt.textContent = (n.book?('['+n.book+'] '):'') + '—'.repeat(depth) + n.name;
+            sel.appendChild(opt);
+        }
+    }
+    walk(tree);
+}
+
+async function createOrLoadPaper() {
+    if (pid) {
+        // 加载已有试卷
+        paperData = await api(`/api/papers/${pid}`);
+        document.getElementById('paperTitle').value = paperData.title;
+        document.getElementById('paperMode').value = paperData.mode;
+        document.getElementById('paperTotalScore').value = paperData.total_score;
+        document.getElementById('paperSealLine').value = paperData.seal_line;
+        document.getElementById('paperHeader').value = paperData.header_text || '';
+        document.getElementById('paperFooter').value = paperData.footer_text || '';
+        document.getElementById('paperStudentInfo').value = paperData.student_info || '';
+        document.getElementById('pageTitle').textContent = '编辑试卷 #' + pid;
+        renderPaperStructure();
+    } else {
+        // 新建
+        const r = await api('/api/papers', {method:'POST', body:{
+            title:'浙江省信息技术试卷',
+            mode:'xuekao',
+            total_score:50,
+            seal_line:1
+        }});
+        pid = r.id;
+        document.getElementById('pid').value = pid;
+    }
+}
+
+function renderPaperStructure() {
+    const el = document.getElementById('paperStructure');
+    const qs = paperData.questions || [];
+    if (qs.length === 0) {
+        el.innerHTML = '<div class="text-center text-muted py-4">暂无题目，请使用智能组卷或手动添加</div>';
+        updateScoreCheck();
+        return;
+    }
+    // 按section分组
+    const groups = {};
+    qs.forEach(q=>{
+        const key = q.big_no || 0;
+        if (!groups[key]) groups[key] = {section_title:q.section_title, section_desc:q.section_desc, items:[]};
+        groups[key].items.push(q);
+    });
+    let html = '';
+    Object.keys(groups).sort((a,b)=>a-b).forEach(bigNo=>{
+        const g = groups[bigNo];
+        html += `<div class="paper-section">
+            <div class="paper-section-head">
+                <input type="text" class="form-control form-control-sm" style="flex:1" value="${esc(g.section_title||'')}" onchange="updateSectionTitle(${bigNo}, this.value)">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info" onclick="avgScore(${bigNo})" title="一键平均小问分值"><i class="bi bi-bar-chart"></i> 一键平均</button>
+                    <button class="btn btn-outline-danger" onclick="removeSection(${bigNo})" title="移除大题"><i class="bi bi-x"></i></button>
+                </div>
+            </div>
+            <input type="text" class="form-control form-control-sm mb-2" placeholder="大题说明" value="${esc(g.section_desc||'')}" onchange="updateSectionDesc(${bigNo}, this.value)">
+            <div class="d-flex align-items-center mb-2">
+                <span class="text-muted small">大题总分：</span>
+                <input type="number" class="form-control form-control-sm ms-2" style="width:80px" id="total_${bigNo}" value="${g.items.reduce((s,i)=>s+Number(i.score||0),0)}">
+                <button class="btn btn-sm btn-outline-primary ms-2" onclick="avgScore(${bigNo})">一键平均到 ${g.items.length} 个小问</button>
+                <span class="text-muted small ms-2" id="actual_${bigNo}">实际：${g.items.reduce((s,i)=>s+Number(i.score||0),0).toFixed(2)}</span>
+            </div>
+            <div>${g.items.map((q,i)=>renderQItem(q,i)).join('')}</div>
+        </div>`;
+    });
+    el.innerHTML = html;
+    updateScoreCheck();
+}
+
+function renderQItem(q, idx) {
+    const stem = (q.q_stem||'').replace(/<[^>]+>/g,'').slice(0,80);
+    const noLabel = q.custom_no || (q.small_no ? `(${q.small_no})` : '');
+    return `
+    <div class="paper-q-item">
+        <div class="q-num">
+            <input type="text" class="form-control form-control-sm" style="width:60px" 
+                value="${noLabel}" placeholder="题号" 
+                onchange="updateCustomNo(${q.id}, this.value)" title="手动修改题号">
+        </div>
+        <div class="q-stem">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge bg-primary">${Q_TYPE[q.q_type]||q.q_type}</span>
+                ${q.q_kp_name?`<span class="badge bg-info text-white">${q.q_kp_name}</span>`:''}
+                <span class="diff-stars">${diffStars(q.q_difficulty||3)}</span>
+            </div>
+            <div class="stem-preview">${esc(stem)}</div>
+        </div>
+        <div class="q-actions" style="flex-direction:row">
+            <input type="number" class="form-control form-control-sm" style="width:70px" value="${q.score||0}" step="0.5" onchange="updateScore(${q.id}, this.value)" title="分值">
+            <button class="btn btn-sm btn-outline-warning" onclick="blindSwap(${q.id})" title="一键盲换"><i class="bi bi-shuffle"></i></button>
+            <button class="btn btn-sm btn-outline-info" onclick="showSimilar(${q.id})" title="同类题推荐"><i class="bi bi-lightbulb"></i></button>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeQ(${q.id})" title="移除"><i class="bi bi-x"></i></button>
+        </div>
+    </div>`;
+}
+
+async function updateScoreCheck() {
+    const actual = (paperData.questions||[]).reduce((s,q)=>s+Number(q.score||0),0);
+    const target = parseFloat(document.getElementById('paperTotalScore').value);
+    const el = document.getElementById('scoreCheck');
+    const match = Math.abs(actual - target) < 0.01;
+    el.innerHTML = `实际总分：<strong class="${match?'text-success':'text-danger'}">${actual.toFixed(2)}</strong> / 目标：${target} ${match?'✓':'✗ 不一致'}`;
+}
+
+// 智能组卷
+async function autoAssemble() {
+    if (!pid) return;
+    if (!confirm('⚠️ 智能组卷将清空当前试卷内容并重新抽题，确认继续？')) return;
+    const template = document.getElementById('templateSelect').value;
+    const diff = parseInt(document.getElementById('targetDiff').value);
+    const kp = document.getElementById('targetKp').value;
+    try {
+        await api(`/api/papers/${pid}/auto_assemble`, {method:'POST', body:{
+            template, difficulty:diff, kp_id:kp||null
+        }});
+        toast('智能组卷完成','success');
+        paperData = await api(`/api/papers/${pid}`);
+        renderPaperStructure();
+    } catch(e) {
+        toast('组卷失败：'+e.message,'error');
+    }
+}
+
+// 题号自动重排 + 支持手动修改
+async function renumber() {
+    await api(`/api/papers/${pid}/renumber`, {method:'POST'});
+    toast('题号已自动重排（手动题号已被清空）','success');
+    paperData = await api(`/api/papers/${pid}`);
+    renderPaperStructure();
+}
+
+// 一键盲换
+async function blindSwap(pqId) {
+    try {
+        const r = await api(`/api/papers/${pid}/swap_blind`, {method:'POST', body:{pq_id:pqId}});
+        toast('已替换为新题','success');
+        paperData = await api(`/api/papers/${pid}`);
+        renderPaperStructure();
+    } catch(e) {
+        toast('替换失败：'+e.message,'error');
+    }
+}
+
+// 同类题推荐
+async function showSimilar(pqId) {
+    currentPqId = pqId;
+    const pq = paperData.questions.find(q=>q.id===pqId);
+    if (!pq) return;
+    const list = await api(`/api/questions/${pq.question_id}/similar`);
+    const el = document.getElementById('similarList');
+    if (list.length === 0) {
+        el.innerHTML = '<div class="text-muted text-center">暂无同类题</div>';
+    } else {
+        el.innerHTML = list.map(q=>`
+            <div class="paper-q-item">
+                <div class="q-num">${q.id}</div>
+                <div class="q-stem">
+                    <div class="d-flex gap-2 mb-1">
+                        <span class="badge bg-primary">${Q_TYPE[q.type]}</span>
+                        <span class="diff-stars">${diffStars(q.difficulty)}</span>
+                        <span class="text-muted small">${q.score}分</span>
+                    </div>
+                    <div class="stem-preview">${esc((q.stem||'').replace(/<[^>]+>/g,'').slice(0,150))}</div>
+                </div>
+                <div class="q-actions">
+                    <button class="btn btn-sm btn-primary" onclick="swapWith(${q.id})">替换</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    new bootstrap.Modal(document.getElementById('similarModal')).show();
+}
+
+async function swapWith(newQid) {
+    await api(`/api/papers/${pid}/swap_with/${newQid}`, {method:'POST', body:{pq_id:currentPqId}});
+    toast('已替换','success');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('similarModal')).hide();
+    paperData = await api(`/api/papers/${pid}`);
+    renderPaperStructure();
+}
+
+// 一键平均分值
+async function avgScore(bigNo) {
+    const totalInput = document.getElementById(`total_${bigNo}`);
+    const total = parseFloat(totalInput.value);
+    if (isNaN(total) || total<=0) { toast('请输入有效总分','warn'); return; }
+    const r = await api(`/api/papers/${pid}/avg_score`, {method:'POST', body:{big_no:bigNo, total}});
+    toast(`已平均分配，每题 ${r.avg} 分`,'success');
+    paperData = await api(`/api/papers/${pid}`);
+    renderPaperStructure();
+}
+
+// 手动修改分值
+async function updateScore(pqId, score) {
+    const idx = paperData.questions.findIndex(q=>q.id===pqId);
+    if (idx>=0) {
+        paperData.questions[idx].score = parseFloat(score);
+        // 立即保存到后端
+        await savePaper(true);
+        updateScoreCheck();
+    }
+}
+
+async function updateCustomNo(pqId, val) {
+    const idx = paperData.questions.findIndex(q=>q.id===pqId);
+    if (idx>=0) {
+        paperData.questions[idx].custom_no = val;
+        await savePaper(true);
+    }
+}
+
+async function updateSectionTitle(bigNo, val) {
+    paperData.questions.forEach(q=>{
+        if (q.big_no===bigNo) q.section_title = val;
+    });
+    await savePaper(true);
+}
+async function updateSectionDesc(bigNo, val) {
+    paperData.questions.forEach(q=>{
+        if (q.big_no===bigNo) q.section_desc = val;
+    });
+    await savePaper(true);
+}
+
+async function removeQ(pqId) {
+    paperData.questions = paperData.questions.filter(q=>q.id!==pqId);
+    await savePaper(true);
+    renderPaperStructure();
+}
+
+async function removeSection(bigNo) {
+    if (!confirm('移除整个大题？')) return;
+    paperData.questions = paperData.questions.filter(q=>q.big_no!==bigNo);
+    await savePaper(true);
+    renderPaperStructure();
+}
+
+// 添加题目
+function addQuestion() {
+    new bootstrap.Modal(document.getElementById('addQModal')).show();
+    searchAddQ();
+}
+
+async function searchAddQ() {
+    const kw = document.getElementById('addQKw').value;
+    const type = document.getElementById('addQType').value;
+    const d = await api(`/api/questions?kw=${encodeURIComponent(kw)}&type=${type}&size=20`);
+    const existingIds = new Set((paperData.questions||[]).map(q=>q.question_id));
+    document.getElementById('addQList').innerHTML = d.list.map(q=>`
+        <div class="paper-q-item">
+            <div class="q-num">${q.id}</div>
+            <div class="q-stem">
+                <div class="d-flex gap-2 mb-1">
+                    <span class="badge bg-primary">${Q_TYPE[q.type]}</span>
+                    <span class="diff-stars">${diffStars(q.difficulty)}</span>
+                </div>
+                <div class="stem-preview">${esc(q.summary)}</div>
+            </div>
+            <div class="q-actions">
+                <button class="btn btn-sm btn-primary" ${existingIds.has(q.id)?'disabled':''} onclick="addQToPaper(${q.id})">${existingIds.has(q.id)?'已添加':'添加'}</button>
+            </div>
+        </div>
+    `).join('') || '<div class="text-muted text-center">无匹配试题</div>';
+}
+
+async function addQToPaper(qid) {
+    // 添加到末尾
+    const maxBig = Math.max(0, ...(paperData.questions||[]).map(q=>q.big_no||0));
+    const newPq = {
+        question_id: qid,
+        section: 'non_single',
+        section_title: `第${maxBig+1}题`,
+        big_no: maxBig+1,
+        small_no: 1,
+        custom_no: '',
+        score: 2
+    };
+    paperData.questions.push(newPq);
+    await savePaper(true);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('addQModal')).hide();
+    renderPaperStructure();
+    toast('已添加','success');
+}
+
+// 保存试卷
+async function savePaper(silent=false) {
+    if (!pid) return;
+    const data = {
+        title: document.getElementById('paperTitle').value,
+        mode: document.getElementById('paperMode').value,
+        total_score: parseFloat(document.getElementById('paperTotalScore').value),
+        seal_line: parseInt(document.getElementById('paperSealLine').value),
+        header_text: document.getElementById('paperHeader').value,
+        footer_text: document.getElementById('paperFooter').value,
+        student_info: document.getElementById('paperStudentInfo').value,
+        questions: paperData.questions,
+        version_note: `保存于 ${new Date().toLocaleString('zh-CN')}`
+    };
+    try {
+        // 先更新试卷基础信息
+        await api(`/api/papers/${pid}`, {method:'PUT', body:data});
+        // 再保存题目结构（生成版本）
+        await api(`/api/papers/${pid}/save`, {method:'POST', body:data});
+        if (!silent) toast('试卷已保存（已生成新版本）','success');
+    } catch(e) {
+        toast('保存失败：'+e.message,'error');
+    }
+}
+
+// 历史版本
+async function showVersions() {
+    const list = await api(`/api/papers/${pid}/versions`);
+    const el = document.getElementById('versionList');
+    if (list.length === 0) {
+        el.innerHTML = '<div class="text-muted text-center">暂无历史版本</div>';
+    } else {
+        el.innerHTML = list.map(v=>`
+            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div>
+                    <div class="small">#${v.id} ${esc(v.version_note)}</div>
+                    <div class="text-muted small">${v.created_at}</div>
+                </div>
+                <button class="btn btn-sm btn-outline-warning" onclick="rollback(${v.id})">回滚到此版本</button>
+            </div>
+        `).join('');
+    }
+    new bootstrap.Modal(document.getElementById('versionModal')).show();
+}
+
+async function rollback(vid) {
+    if (!confirm('⚠️ 回滚将覆盖当前试卷内容，确认？')) return;
+    await api(`/api/papers/${pid}/rollback/${vid}`, {method:'POST'});
+    toast('已回滚','success');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('versionModal')).hide();
+    paperData = await api(`/api/papers/${pid}`);
+    renderPaperStructure();
+}
+
+// 初始化
+loadKpOptions();
+createOrLoadPaper();
+
+// 监听总分变化
+document.getElementById('paperTotalScore').addEventListener('input', updateScoreCheck);
+</script>
+{% endblock %}

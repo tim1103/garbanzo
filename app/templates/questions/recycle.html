@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}回收站 - 题库管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">回收站</h1>
+        <div class="page-sub">试题删除后进入回收站，30天后自动物理删除</div>
+    </div>
+    <button class="btn btn-outline-danger" onclick="cleanupNow()"><i class="bi bi-trash3"></i> 立即清理过期项</button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div id="recycleList"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadRecycle() {
+    const d = await api('/api/questions?recycle=1&size=100');
+    const el = document.getElementById('recycleList');
+    if (d.list.length === 0) {
+        el.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-trash3 fs-1"></i><br>回收站为空</div>';
+        return;
+    }
+    el.innerHTML = d.list.map(q=>{
+        const deletedAt = new Date(q.deleted_at);
+        const expireAt = new Date(deletedAt.getTime() + 30*24*3600*1000);
+        const daysLeft = Math.ceil((expireAt - new Date()) / (24*3600*1000));
+        return `
+        <div class="paper-q-item">
+            <div class="q-num">${q.id}</div>
+            <div class="q-stem">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="badge bg-secondary">${Q_TYPE[q.type]||q.type}</span>
+                    <span class="badge bg-info text-white">删除于 ${q.deleted_at}</span>
+                    <span class="badge ${daysLeft<=7?'bg-danger':'bg-warning'} text-dark">剩余 ${daysLeft} 天后物理删除</span>
+                </div>
+                <div class="stem-preview">${esc(q.summary||q.stem).slice(0,200)}</div>
+            </div>
+            <div class="q-actions">
+                <button class="btn btn-sm btn-outline-success" onclick="restore(${q.id})" title="恢复"><i class="bi bi-arrow-counterclockwise"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="purge(${q.id})" title="彻底删除"><i class="bi bi-x-circle"></i></button>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+async function restore(id) {
+    await api(`/api/questions/${id}/restore`, {method:'POST'});
+    toast('已恢复','success');
+    loadRecycle();
+}
+
+async function purge(id) {
+    if (!confirm('⚠️ 彻底删除将无法恢复，确认？')) return;
+    await api(`/api/questions/${id}/purge`, {method:'DELETE'});
+    toast('已彻底删除','success');
+    loadRecycle();
+}
+
+async function cleanupNow() {
+    const r = await api('/api/questions/recycle_cleanup', {method:'POST'});
+    toast(`已清理 ${r.purged} 条过期项`,'success');
+    loadRecycle();
+}
+
+loadRecycle();
+</script>
+{% endblock %}

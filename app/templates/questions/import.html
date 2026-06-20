@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}批量导入 - 题库管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">批量导入试题</h1>
+        <div class="page-sub">支持JSON批量导入，自动查重；冲突时弹窗逐条确认（覆盖/跳过/保留两份）</div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">导入说明</div>
+    <div class="card-body">
+        <p class="mb-2">请上传JSON文件，格式如下：</p>
+        <pre class="code-block">{
+  "items": [
+    {
+      "type": "single_choice",
+      "stem": "在Python中，下列哪个是合法的变量名？",
+      "options": {"A": "2name", "B": "name_2", "C": "class", "D": "name-2"},
+      "answer": "B",
+      "difficulty": 2,
+      "score": 2,
+      "kp_id": 9,
+      "source": "2024年模拟",
+      "year": "2024",
+      "analysis": "Python变量名不能以数字开头，不能是关键字，不能含连字符",
+      "tag_ids": [1]
+    },
+    {
+      "type": "python_fill",
+      "stem": "完成以下冒泡排序代码：",
+      "blanks": [
+        {"id": "b1", "answer": "range(n-1)", "score": 2},
+        {"id": "b2", "answer": "range(n-1-i)", "score": 3}
+      ],
+      "difficulty": 3,
+      "score": 5,
+      "kp_id": 17
+    }
+  ]
+}</pre>
+        <div class="text-muted small">支持的题型：single_choice / python_read / python_fill / flowchart / flask_fill / pandas / binary_tree / linked_list</div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">上传JSON文件</div>
+    <div class="card-body">
+        <input type="file" id="fileInput" accept=".json" class="form-control mb-3">
+        <button class="btn btn-primary" onclick="doImport()"><i class="bi bi-upload"></i> 开始导入</button>
+        <span class="text-muted ms-3" id="importStatus"></span>
+    </div>
+</div>
+
+<!-- 导入结果 -->
+<div class="card mb-3" id="resultCard" style="display:none">
+    <div class="card-header">导入结果</div>
+    <div class="card-body">
+        <div id="resultSummary"></div>
+        <!-- 冲突列表 -->
+        <div id="conflictList" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- 冲突处理弹窗 -->
+<div class="modal fade" id="conflictModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">检测到重复题 - 请逐条确认</h5>
+      </div>
+      <div class="modal-body" id="conflictBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="applyAllConflict('overwrite')">全部覆盖</button>
+        <button class="btn btn-secondary" onclick="applyAllConflict('skip')">全部跳过</button>
+        <button class="btn btn-success" onclick="applyAllConflict('keep_both')">全部保留两份</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let conflicts = [];
+let conflictIdx = 0;
+
+async function doImport() {
+    const f = document.getElementById('fileInput').files[0];
+    if (!f) { toast('请先选择JSON文件','warn'); return; }
+    const text = await f.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch(e) { toast('JSON格式错误：'+e.message,'error'); return; }
+    document.getElementById('importStatus').textContent = '正在导入...';
+    
+    try {
+        const r = await api('/api/questions/import', {method:'POST', body:{items:data.items||[]}});
+        document.getElementById('importStatus').textContent = '';
+        document.getElementById('resultCard').style.display = 'block';
+        conflicts = r.conflicts;
+        conflictIdx = 0;
+        document.getElementById('resultSummary').innerHTML = `
+            <div class="alert alert-success">
+                <strong>成功导入：${r.added} 题</strong><br>
+                检测到 ${r.conflict_count} 道重复题，请逐条确认处理方式。
+            </div>
+        `;
+        if (r.conflict_count > 0) {
+            renderConflict();
+            new bootstrap.Modal(document.getElementById('conflictModal')).show();
+        }
+    } catch(e) {
+        document.getElementById('importStatus').textContent = '导入失败';
+        toast('导入失败：'+e.message,'error');
+    }
+}
+
+function renderConflict() {
+    if (conflictIdx >= conflicts.length) {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('conflictModal')).hide();
+        toast('冲突处理完毕','success');
+        return;
+    }
+    const c = conflicts[conflictIdx];
+    const incoming = c.incoming;
+    const typeMap = {
+        'single_choice':'单选题','python_read':'Python阅读题','python_fill':'Python代码填空题',
+        'flowchart':'流程图分析题','flask_fill':'Flask代码填空题','pandas':'Pandas数据处理题',
+        'binary_tree':'二叉树操作题','linked_list':'链表操作题'
+    };
+    document.getElementById('conflictBody').innerHTML = `
+        <div class="d-flex justify-content-between mb-3">
+            <span class="text-muted">第 ${conflictIdx+1} / ${conflicts.length} 条冲突</span>
+            <span class="badge bg-warning">已存在题ID: ${c.existing_id}</span>
+        </div>
+        <div class="card mb-2"><div class="card-header">新导入题</div><div class="card-body">
+            <p><strong>题型：</strong>${typeMap[incoming.type]}</p>
+            <p><strong>题干：</strong>${esc(incoming.stem||'').slice(0,200)}</p>
+            <p><strong>难度：</strong>${'★'.repeat(incoming.difficulty||3)}</p>
+        </div></div>
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 该题与题库中已有的试题题干完全相同，请选择处理方式：
+        </div>
+    `;
+    // 动态修改底部按钮
+    const footer = document.querySelector('#conflictModal .modal-footer');
+    footer.innerHTML = `
+        <button class="btn btn-outline-secondary" onclick="resolveConflict('skip')">跳过</button>
+        <button class="btn btn-outline-success" onclick="resolveConflict('keep_both')">保留两份</button>
+        <button class="btn btn-danger" onclick="resolveConflict('overwrite')">覆盖旧题</button>
+    `;
+}
+
+async function resolveConflict(action) {
+    const c = conflicts[conflictIdx];
+    try {
+        await api('/api/questions/resolve_conflict', {
+            method:'POST',
+            body: {
+                action,
+                incoming: c.incoming,
+                existing_id: c.existing_id
+            }
+        });
+        conflictIdx++;
+        renderConflict();
+    } catch(e) {
+        toast('处理失败：'+e.message,'error');
+    }
+}
+
+async function applyAllConflict(action) {
+    const labels = {overwrite:'覆盖', skip:'跳过', keep_both:'保留两份'};
+    if (!confirm(`确认对剩余 ${conflicts.length - conflictIdx} 条冲突全部"${labels[action]}"？`)) return;
+    while (conflictIdx < conflicts.length) {
+        const c = conflicts[conflictIdx];
+        try {
+            await api('/api/questions/resolve_conflict', {
+                method:'POST',
+                body:{action, incoming:c.incoming, existing_id:c.existing_id}
+            });
+        } catch(e) {}
+        conflictIdx++;
+    }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('conflictModal')).hide();
+    toast('批量处理完毕','success');
+}
+</script>
+{% endblock %}

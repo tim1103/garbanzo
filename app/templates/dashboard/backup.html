@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}备份与说明{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">数据备份与系统说明</h1>
+        <div class="page-sub">单用户本地版 · SQLite数据库 · 手动拷贝即可完成备份迁移</div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-database"></i> 数据备份指引</div>
+            <div class="card-body">
+                <h6>方式一：手动拷贝（推荐）</h6>
+                <ol class="small">
+                    <li>关闭运行中的系统</li>
+                    <li>拷贝数据库文件：<code>data/exam.db</code></li>
+                    <li>拷贝附件目录：<code>app/static/uploads/</code></li>
+                    <li>将上述两份内容存入U盘或网盘任意位置</li>
+                </ol>
+                <hr>
+                <h6>方式二：脚本备份</h6>
+                <pre class="code-block">python scripts/backup.py</pre>
+                <p class="small text-muted">将在 <code>download/backup/</code> 下生成带时间戳的备份压缩包</p>
+                <button class="btn btn-primary btn-sm" onclick="runBackup()"><i class="bi bi-download"></i> 立即生成备份</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-arrow-left-right"></i> 数据迁移</div>
+            <div class="card-body">
+                <p class="small">将本机生成的 <code>exam.db</code> 与 <code>uploads/</code> 文件夹整体复制到目标机器的相同路径下即可完成迁移。无需任何配置。</p>
+                <p class="small text-muted">注意：如使用局域网访问模式，请确保目标机器IP地址已更新到访问URL中。</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-info-circle"></i> 系统信息</div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th width="40%">技术栈</th><td>Python Flask + SQLite + B/S架构</td></tr>
+                    <tr><th>适用对象</th><td>单人教师本地/局域网使用</td></tr>
+                    <tr><th>学科范围</th><td>浙江省高中信息技术（学考2本必修+选考3本选择性必修）</td></tr>
+                    <tr><th>浏览器要求</th><td>Chrome 90+、Edge 90+（保障Monaco/Mermaid/MathJax渲染）</td></tr>
+                    <tr><th>题型支持</th><td>单选/Python阅读/代码填空/流程图/Flask填空/Pandas/二叉树/链表</td></tr>
+                    <tr><th>自动保存</th><td>每分钟写入LocalStorage，崩溃后恢复草稿</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-keyboard"></i> 快捷键说明</div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><td><kbd>Tab</kbd></td><td>在代码填空编辑器中跳转到下一个填空位</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>关闭当前弹窗</td></tr>
+                    <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>保存当前试题/试卷</td></tr>
+                </table>
+                <p class="small text-muted">注：支持在浏览器开发者工具中扩展自定义快捷键，详见 app/static/js/app.js</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-shield-check"></i> 已去除的非核心功能</div>
+            <div class="card-body">
+                <ul class="small mb-0">
+                    <li>组织权限与多人协作</li>
+                    <li>在线考试与考后分析</li>
+                    <li>水印（保持卷面干净）</li>
+                    <li>代码跨页"接续见下页"提示（直接截断）</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function runBackup() {
+    toast('正在生成备份...','info');
+    const r = await fetch('/api/backup', {method:'POST'});
+    if (r.ok) {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `exam_backup_${new Date().toISOString().slice(0,10)}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('备份已下载','success');
+    } else {
+        toast('备份失败','error');
+    }
+}
+</script>
+{% endblock %}

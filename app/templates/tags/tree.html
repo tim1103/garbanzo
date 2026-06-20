@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}知识点树与标签管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">知识点树与标签管理</h1>
+        <div class="page-sub">浙江省考纲知识点树（增量更新，保留自定义）· 自定义标签</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/api/kp/export_excel" class="btn btn-outline-success"><i class="bi bi-file-earmark-excel"></i> 导出Excel</a>
+        <a href="/api/kp/export" class="btn btn-outline-info"><i class="bi bi-file-earmark-code"></i> 导出JSON</a>
+        <button class="btn btn-primary" onclick="importKp()"><i class="bi bi-upload"></i> 导入JSON</button>
+        <input type="file" id="kpFileInput" accept=".json" style="display:none" onchange="doImportKp(event)">
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                知识点树
+                <button class="btn btn-sm btn-primary ms-3" onclick="addRootKp()"><i class="bi bi-plus"></i> 添加根节点</button>
+            </div>
+            <div class="card-body" style="max-height:600px;overflow-y:auto">
+                <div id="kpTree"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                标签管理
+                <button class="btn btn-sm btn-primary ms-3" onclick="addTag()"><i class="bi bi-plus"></i> 新建标签</button>
+            </div>
+            <div class="card-body" style="max-height:600px;overflow-y:auto">
+                <div id="tagList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadKpTree() {
+    const tree = await api('/api/kp/tree');
+    const el = document.getElementById('kpTree');
+    el.innerHTML = renderTree(tree);
+}
+
+function renderTree(nodes, level=0) {
+    return nodes.map(n=>`
+        <div style="margin-left:${level*20}px">
+            <div class="kp-tree-node d-flex align-items-center justify-content-between" data-id="${n.id}">
+                <div>
+                    ${n.is_preset?'<i class="bi bi-bookmark-star-fill text-warning"></i>':'<i class="bi bi-bookmark-plus text-success"></i>'}
+                    <span class="${n.is_preset?'':'text-success fw-bold'}">${esc(n.name)}</span>
+                    ${n.book?`<span class="badge bg-secondary badge-book">${n.book}</span>`:''}
+                    <small class="text-muted">${n.code||''}</small>
+                </div>
+                <div class="action-btns">
+                    <button class="btn btn-sm btn-outline-primary" onclick="addChild(${n.id})" title="添加子节点"><i class="bi bi-plus"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="editKp(${n.id}, '${esc(n.name)}', '${esc(n.code||'')}', '${esc(n.book||'')}')" title="编辑"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="delKp(${n.id})" title="删除"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+            ${n.children&&n.children.length?renderTree(n.children, level+1):''}
+        </div>
+    `).join('');
+}
+
+async function addRootKp() {
+    const name = prompt('根节点名称：');
+    if (!name) return;
+    await api('/api/kp', {method:'POST', body:{name, parent_id:null}});
+    toast('已添加','success');
+    loadKpTree();
+}
+
+async function addChild(parentId) {
+    const name = prompt('子节点名称：');
+    if (!name) return;
+    await api('/api/kp', {method:'POST', body:{name, parent_id:parentId}});
+    toast('已添加子节点','success');
+    loadKpTree();
+}
+
+async function editKp(id, name, code, book) {
+    const newName = prompt('名称：', name);
+    if (newName === null) return;
+    const newCode = prompt('编码（可空）：', code) || '';
+    const newBook = prompt('所属教材（可空）：', book) || '';
+    await api(`/api/kp/${id}`, {method:'PUT', body:{name:newName, code:newCode, book:newBook}});
+    toast('已更新','success');
+    loadKpTree();
+}
+
+async function delKp(id) {
+    if (!confirm('删除该知识点及其所有子节点？')) return;
+    await api(`/api/kp/${id}`, {method:'DELETE'});
+    toast('已删除','success');
+    loadKpTree();
+}
+
+function importKp() {
+    document.getElementById('kpFileInput').click();
+}
+
+async function doImportKp(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch(e) { toast('JSON格式错误','error'); return; }
+    if (!confirm('⚠️ 导入将清空系统预设知识点并重新加载（教师自定义保留）。确认？')) return;
+    await api('/api/kp/import', {method:'POST', body:{data}});
+    toast('导入完成','success');
+    loadKpTree();
+    e.target.value = '';
+}
+
+// 标签管理
+async function loadTags() {
+    const list = await api('/api/tags');
+    const el = document.getElementById('tagList');
+    el.innerHTML = list.map(t=>`
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+            <span class="tag-pill colored" style="background:${t.color}">${t.name}</span>
+            <span class="text-muted small">${t.cnt}题</span>
+            <button class="btn btn-sm btn-outline-danger" onclick="delTag(${t.id})"><i class="bi bi-trash"></i></button>
+        </div>
+    `).join('') || '<div class="text-muted">暂无标签</div>';
+}
+
+async function addTag() {
+    const name = prompt('标签名称：');
+    if (!name) return;
+    const color = prompt('颜色（十六进制，如 #28a745）：', '#6c757d') || '#6c757d';
+    await api('/api/tags', {method:'POST', body:{name, color}});
+    toast('已添加','success');
+    loadTags();
+}
+
+async function delTag(id) {
+    if (!confirm('删除该标签？')) return;
+    await api(`/api/tags/${id}`, {method:'DELETE'});
+    toast('已删除','success');
+    loadTags();
+}
+
+loadKpTree();
+loadTags();
+</script>
+{% endblock %}

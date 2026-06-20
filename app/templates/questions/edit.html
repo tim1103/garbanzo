@@ -1,0 +1,739 @@
+{% extends 'base.html' %}
+{% block title %}录入试题 - 题库管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title" id="pageTitle">录入新试题</h1>
+        <div class="page-sub">支持Monaco代码填空双轨制、Pandas表格、LaTeX公式、流程图</div>
+    </div>
+    <div>
+        <button class="btn btn-primary" onclick="saveQuestion()" data-shortcut="save">
+            <i class="bi bi-save"></i> 保存（Ctrl+Enter）
+        </button>
+        <a href="/questions" class="btn btn-outline-secondary">返回</a>
+    </div>
+</div>
+
+<input type="hidden" id="qid" value="{{qid or ''}}">
+
+<div class="row g-3">
+    <!-- 左侧：表单 -->
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header">基本信息</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">题型</label>
+                        <select id="qType" class="form-select" onchange="onTypeChange()">
+                            {% for k,v in question_types.items() %}
+                            <option value="{{k}}">{{v}}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">所属教材/知识点</label>
+                        <select id="qKp" class="form-select"></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">难度</label>
+                        <select id="qDiff" class="form-select">
+                            <option value="1">★☆☆☆☆ 易</option>
+                            <option value="2">★★☆☆☆ 偏易</option>
+                            <option value="3" selected>★★★☆☆ 中</option>
+                            <option value="4">★★★★☆ 偏难</option>
+                            <option value="5">★★★★★ 难</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">分值</label>
+                        <input type="number" id="qScore" class="form-control" value="2" step="0.5">
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">来源（如：2024年6月浙江学考）</label>
+                        <input type="text" id="qSource" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">年份</label>
+                        <input type="text" id="qYear" class="form-control" placeholder="2024">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">标签</label>
+                        <button class="btn btn-sm btn-outline-primary w-100" onclick="openTagModal()">
+                            <i class="bi bi-tags"></i> 选择标签 <span id="selectedTagNames" class="text-muted"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between">
+                <span>题干</span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="insertImage()" title="插入图片"><i class="bi bi-image"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="insertCodeBlock()" title="代码块"><i class="bi bi-code-slash"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="insertLatex()" title="LaTeX公式"><i class="bi bi-superscript"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="insertMermaid()" title="流程图"><i class="bi bi-diagram-2"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="insertTable()" title="Pandas表格"><i class="bi bi-table"></i></button>
+                </div>
+            </div>
+            <div class="card-body">
+                <textarea id="stemEditor" class="form-control" rows="6" placeholder="输入题干，支持HTML标签"></textarea>
+                <div class="mt-2">
+                    <div class="text-muted small mb-1">实时预览：</div>
+                    <div class="stem-preview" id="stemPreview" style="min-height:60px"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 单选题选项 -->
+        <div class="card mb-3" id="optionsCard" style="display:none">
+            <div class="card-header">单选选项</div>
+            <div class="card-body">
+                <div id="optionList">
+                    <div class="row g-2 mb-2">
+                        <div class="col-1"><span class="badge bg-primary">A</span></div>
+                        <div class="col-10"><input type="text" class="form-control opt-input" data-key="A" placeholder="选项A内容"></div>
+                        <div class="col-1"><input type="radio" name="correctOpt" value="A" title="正确答案"></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-1"><span class="badge bg-primary">B</span></div>
+                        <div class="col-10"><input type="text" class="form-control opt-input" data-key="B" placeholder="选项B内容"></div>
+                        <div class="col-1"><input type="radio" name="correctOpt" value="B" title="正确答案"></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-1"><span class="badge bg-primary">C</span></div>
+                        <div class="col-10"><input type="text" class="form-control opt-input" data-key="C" placeholder="选项C内容"></div>
+                        <div class="col-1"><input type="radio" name="correctOpt" value="C" title="正确答案"></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-1"><span class="badge bg-primary">D</span></div>
+                        <div class="col-10"><input type="text" class="form-control opt-input" data-key="D" placeholder="选项D内容"></div>
+                        <div class="col-1"><input type="radio" name="correctOpt" value="D" title="正确答案"></div>
+                    </div>
+                </div>
+                <div class="text-muted small mt-2">选择正确答案对应的单选框</div>
+            </div>
+        </div>
+
+        <!-- 代码填空双轨制（仅对python_fill/flask_fill显示） -->
+        <div class="card mb-3" id="codeFillCard" style="display:none">
+            <div class="card-header">
+                <span>代码填空 - 双轨制编辑</span>
+                <span class="text-muted small">在Monaco中选中代码片段后点击"设为填空"自动生成占位符</span>
+            </div>
+            <div class="card-body">
+                <!-- 图片上传模式 -->
+                <div class="mb-2">
+                    <label class="form-label me-3">图片上传模式：</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="imgMode" id="imgStd" value="standard" checked onchange="saveImgMode()">
+                        <label class="form-check-label" for="imgStd">标准模式（800px/80%质量，自动压缩）</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="imgMode" id="imgHd" value="hd" onchange="saveImgMode()">
+                        <label class="form-check-label" for="imgHd">高清模式（保留原图）</label>
+                    </div>
+                </div>
+                <div class="d-flex mb-2 gap-2">
+                    <button class="btn btn-sm btn-warning" onclick="setSelectionAsBlank()">
+                        <i class="bi bi-brush"></i> 设为填空
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearBlanks()">清空所有填空</button>
+                    <span class="text-muted small align-self-center">提示：选中代码 → 点击"设为填空"，将生成 {<!-- -->{b1}<!-- -->} 形式的占位符</span>
+                </div>
+                <div id="monacoEditor"></div>
+                <input type="hidden" id="codeContent">
+            </div>
+        </div>
+
+        <!-- 填空管理面板（集中管理各空答案与分值） -->
+        <div class="card mb-3" id="blankManagerCard" style="display:none">
+            <div class="card-header">
+                填空管理面板
+                <button class="btn btn-sm btn-outline-primary ms-3" onclick="addBlankManually()"><i class="bi bi-plus"></i> 手动添加填空</button>
+            </div>
+            <div class="card-body">
+                <div class="blank-manager" id="blankList">
+                    <div class="text-muted text-center py-2">暂无填空，请在Monaco编辑器中选中代码后点击"设为填空"</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pandas数据表格（仅pandas类型显示） -->
+        <div class="card mb-3" id="tableCard" style="display:none">
+            <div class="card-header">Pandas数据表格
+                <span class="text-muted small">仅支持标准二维表，禁止合并单元格/多层级表头</span>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <small class="text-muted">操作提示：从Excel复制标准二维表（无合并单元格），粘贴到下方文本框</small>
+                </div>
+                <textarea id="tableInput" class="form-control" rows="6" 
+                    placeholder="粘贴Excel表格内容（Tab分隔）..." 
+                    onpaste="checkTablePaste(event)"></textarea>
+                <div class="mt-2" id="tablePreview"></div>
+            </div>
+        </div>
+
+        <!-- 解析区（独立富文本，支持图片/代码/LaTeX） -->
+        <div class="card mb-3">
+            <div class="card-header">解析
+                <span class="text-muted small">独立富文本编辑器，完整支持图片、代码块、LaTeX公式</span>
+            </div>
+            <div class="card-body">
+                <div class="btn-group btn-group-sm mb-2">
+                    <button class="btn btn-outline-secondary" onclick="wrapSelection('analysis', '<b>', '</b>')"><b>B</b></button>
+                    <button class="btn btn-outline-secondary" onclick="wrapSelection('analysis', '<i>', '</i>')"><i>I</i></button>
+                    <button class="btn btn-outline-secondary" onclick="insertImageToAnalysis()"><i class="bi bi-image"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="wrapSelection('analysis', '<pre>', '</pre>')"><i class="bi bi-code-slash"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="wrapSelection('analysis', '$$', '$$')">LaTeX</button>
+                </div>
+                <textarea id="analysisEditor" class="form-control" rows="6" 
+                    placeholder="输入解析，支持HTML/代码块/LaTeX公式（如 $\sum_{i=1}^{n} i = \frac{n(n+1)}{2}$）"
+                    oninput="previewAnalysis()"></textarea>
+                <div class="mt-2">
+                    <div class="text-muted small mb-1">实时预览：</div>
+                    <div class="stem-preview" id="analysisPreview" style="min-height:60px"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：实时预览与帮助 -->
+    <div class="col-lg-4">
+        <div class="card mb-3 sticky-top" style="top:20px">
+            <div class="card-header">实时试卷预览</div>
+            <div class="card-body">
+                <div class="paper-preview" style="padding:20px;font-size:12px" id="livePreview">
+                    <small class="text-muted">编辑后实时显示效果...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 标签选择弹窗 -->
+<div class="modal fade" id="tagModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">选择标签</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="tagModalBody"></div>
+      <div class="modal-footer"><button class="btn btn-primary" onclick="confirmTags()">确定</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 隐藏图片上传input -->
+<input type="file" id="imgInput" accept="image/*" style="display:none" onchange="doUploadImage(event)">
+<input type="file" id="imgInputAnalysis" accept="image/*" style="display:none" onchange="doUploadImageAnalysis(event)">
+{% endblock %}
+
+{% block scripts %}
+<!-- Monaco Editor -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>
+let qid = document.getElementById('qid').value;
+let selectedTagIds = [];
+let allTags = [];
+let blankSeq = 0;
+let blanks = [];  // [{id:'b1', answer:'', score:2}]
+let editor = null;
+let codeFillTypes = ['python_fill', 'flask_fill'];
+
+// 初始化Monaco
+require.config({paths:{vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+require(['vs/editor/editor.main'], function() {
+    editor = monaco.editor.create(document.getElementById('monacoEditor'), {
+        value: '# 在此输入Python/Flask代码\n# 选中代码后点击"设为填空"按钮\n',
+        language: 'python',
+        theme: 'vs',
+        automaticLayout: true,
+        fontSize: 13,
+        minimap: {enabled: false}
+    });
+    
+    // 注册快捷键: Tab跳转到下一个填空
+    editor.addCommand(monaco.KeyCode.Tab, function() {
+        // 查找当前光标之后的下一个填空
+        const position = editor.getPosition();
+        const model = editor.getModel();
+        const text = model.getValue();
+        const blankRe = /\{\{b(\d+)\}\}/g;
+        let m, nextBlank = null;
+        while ((m = blankRe.exec(text)) !== null) {
+            const pos = model.getPositionAt(m.index);
+            if (pos.lineNumber > position.lineNumber || 
+                (pos.lineNumber === position.lineNumber && pos.column > position.column)) {
+                nextBlank = m.index;
+                break;
+            }
+        }
+        if (nextBlank === null) {
+            // 从开头查找
+            blankRe.lastIndex = 0;
+            m = blankRe.exec(text);
+            if (m) nextBlank = m.index;
+        }
+        if (nextBlank !== null) {
+            const pos = model.getPositionAt(nextBlank);
+            editor.setPosition(pos);
+            editor.revealLineInCenter(pos.lineNumber);
+            // 选中该填空占位符
+            const endPos = model.getPositionAt(nextBlank + m[0].length);
+            editor.setSelection(new monaco.Range(pos.lineNumber, pos.column, endPos.lineNumber, endPos.column));
+            toast('已跳转到下一个填空', 'info');
+        } else {
+            toast('未找到填空', 'info');
+        }
+    });
+    
+    // 监听内容变化
+    editor.onDidChangeModelContent(()=>{ syncBlanksFromCode(); });
+    
+    // 如果是编辑模式，加载已有数据
+    if (qid) loadQuestion();
+});
+
+async function loadKpOptions() {
+    const tree = await api('/api/kp/tree');
+    const sel = document.getElementById('qKp');
+    function walk(nodes, depth=0) {
+        for (const n of nodes) {
+            const opt = document.createElement('option');
+            opt.value = n.id;
+            opt.textContent = (n.book?('['+n.book+'] '):'') + '—'.repeat(depth) + n.name;
+            sel.appendChild(opt);
+        }
+    }
+    walk(tree);
+}
+
+async function loadTags() {
+    allTags = await api('/api/tags');
+}
+
+function openTagModal() {
+    const body = document.getElementById('tagModalBody');
+    body.innerHTML = allTags.map(t=>`
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="${t.id}" id="tm_${t.id}" ${selectedTagIds.includes(t.id)?'checked':''}>
+            <label class="form-check-label" for="tm_${t.id}">
+                <span class="tag-pill colored" style="background:${t.color}">${t.name}</span> (${t.cnt})
+            </label>
+        </div>
+    `).join('');
+    new bootstrap.Modal(document.getElementById('tagModal')).show();
+}
+
+function confirmTags() {
+    selectedTagIds = Array.from(document.querySelectorAll('#tagModalBody input:checked')).map(i=>parseInt(i.value));
+    document.getElementById('selectedTagNames').textContent = selectedTagIds.length ? `(${selectedTagIds.length}个)` : '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('tagModal')).hide();
+}
+
+function onTypeChange() {
+    const t = document.getElementById('qType').value;
+    document.getElementById('optionsCard').style.display = (t==='single_choice')?'block':'none';
+    document.getElementById('codeFillCard').style.display = codeFillTypes.includes(t)?'block':'none';
+    document.getElementById('blankManagerCard').style.display = codeFillTypes.includes(t)?'block':'none';
+    document.getElementById('tableCard').style.display = (t==='pandas')?'block':'none';
+    // 切换Monaco语言
+    if (editor) {
+        if (t === 'flask_fill') monaco.editor.setModelLanguage(editor.getModel(), 'python');
+        else monaco.editor.setModelLanguage(editor.getModel(), 'python');
+    }
+    updateLivePreview();
+}
+
+function setSelectionAsBlank() {
+    if (!editor) return;
+    const sel = editor.getSelection();
+    const text = editor.getModel().getValueInRange(sel);
+    if (!text.trim()) { toast('请先在编辑器中选中代码片段','warn'); return; }
+    blankSeq++;
+    const blankId = `b${blankSeq}`;
+    const placeholder = '{' + '{' + blankId + '}' + '}';
+    editor.executeEdits('blank', [{
+        range: sel,
+        text: placeholder
+    }]);
+    // 添加到填空管理面板
+    blanks.push({id: blankId, answer: text, score: 2});
+    renderBlanks();
+    toast(`已设为填空 ${blankId}（原内容已存为答案）`, 'success');
+}
+
+function clearBlanks() {
+    if (!editor) return;
+    if (!confirm('清空所有填空？这将移除所有 {<!-- -->{bN}<!-- -->} 占位符')) return;
+    let text = editor.getModel().getValue();
+    text = text.replace(/\{\{b\d+\}\}/g, '________');
+    editor.getModel().setValue(text);
+    blanks = [];
+    blankSeq = 0;
+    renderBlanks();
+}
+
+function syncBlanksFromCode() {
+    if (!editor) return;
+    const text = editor.getModel().getValue();
+    const re = /\{\{b(\d+)\}\}/g;
+    let m;
+    const foundIds = new Set();
+    while ((m = re.exec(text)) !== null) {
+        foundIds.add(m[1]);
+        if (!blanks.find(b=>b.id === `b${m[1]}`)) {
+            blanks.push({id: `b${m[1]}`, answer: '', score: 2});
+            if (parseInt(m[1]) > blankSeq) blankSeq = parseInt(m[1]);
+        }
+    }
+    // 移除不存在的填空
+    blanks = blanks.filter(b => foundIds.has(b.id.replace('b','')));
+    renderBlanks();
+    document.getElementById('codeContent').value = text;
+}
+
+function addBlankManually() {
+    blankSeq++;
+    const id = `b${blankSeq}`;
+    blanks.push({id, answer:'', score:2});
+    renderBlanks();
+    // 在Monaco当前光标位置插入占位符
+    if (editor) {
+        const pos = editor.getPosition();
+        editor.executeEdits('blank', [{
+            range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+            text: '{' + '{' + id + '}' + '}'
+        }]);
+    }
+}
+
+function renderBlanks() {
+    const el = document.getElementById('blankList');
+    if (blanks.length === 0) {
+        el.innerHTML = '<div class="text-muted text-center py-2">暂无填空，请在Monaco编辑器中选中代码后点击"设为填空"</div>';
+        return;
+    }
+    el.innerHTML = blanks.map((b,i)=>`
+        <div class="blank-item">
+            <span class="badge bg-warning text-dark">${'{'+b.id+'}'}</span>
+            <input type="text" class="form-control" placeholder="填空答案" value="${esc(b.answer)}" onchange="updateBlank(${i},'answer',this.value)">
+            <input type="number" class="form-control" placeholder="分值" value="${b.score}" step="0.5" onchange="updateBlank(${i},'score',parseFloat(this.value))">
+            <button class="btn btn-sm btn-outline-danger" onclick="removeBlank(${i})"><i class="bi bi-x"></i></button>
+        </div>
+    `).join('');
+}
+
+function updateBlank(i, field, val) {
+    blanks[i][field] = val;
+}
+
+function removeBlank(i) {
+    const b = blanks[i];
+    // 从Monaco中移除占位符
+    if (editor) {
+        let text = editor.getModel().getValue();
+        text = text.replace('{' + '{' + b.id + '}' + '}', '________');
+        editor.getModel().setValue(text);
+    }
+    blanks.splice(i, 1);
+    renderBlanks();
+}
+
+// Pandas表格粘贴校验 - PRD: 仅支持标准二维表，多层级表头/合并单元格直接报错
+function checkTablePaste(e) {
+    setTimeout(()=>{
+        const text = document.getElementById('tableInput').value;
+        if (!text) return;
+        const lines = text.split('\n').filter(l=>l.trim());
+        if (lines.length === 0) return;
+        // 检查列数是否一致
+        const cols = lines[0].split('\t').length;
+        for (let i=1; i<lines.length; i++) {
+            if (lines[i].split('\t').length !== cols) {
+                alert('❌ 检测到不规则表格：\n请先在Excel中取消合并单元格并展平表头，再重新粘贴。\n\n（PRD要求：仅支持标准二维表）');
+                document.getElementById('tableInput').value = '';
+                document.getElementById('tablePreview').innerHTML = '';
+                return;
+            }
+        }
+        // 渲染表格预览
+        const html = '<table class="table table-sm table-bordered"><thead><tr>' + 
+            lines[0].split('\t').map(c=>`<th>${esc(c)}</th>`).join('') + 
+            '</tr></thead><tbody>' + 
+            lines.slice(1).map(l=>'<tr>'+l.split('\t').map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>').join('') +
+            '</tbody></table>';
+        document.getElementById('tablePreview').innerHTML = html;
+    }, 50);
+}
+
+function insertTable() {
+    // 在题干中插入表格标记
+    const stem = document.getElementById('stemEditor');
+    const tableText = document.getElementById('tableInput')?.value || '';
+    if (tableText) {
+        // 转为HTML table
+        const lines = tableText.split('\n').filter(l=>l.trim());
+        if (lines.length > 0) {
+            const html = '<table class="table table-bordered"><thead><tr>' + 
+                lines[0].split('\t').map(c=>`<th>${esc(c)}</th>`).join('') + 
+                '</tr></thead><tbody>' + 
+                lines.slice(1).map(l=>'<tr>'+l.split('\t').map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>').join('') +
+                '</tbody></table>';
+            stem.value += html;
+        }
+    } else {
+        stem.value += '<table class="table table-bordered"><tr><td>列1</td><td>列2</td></tr><tr><td>值1</td><td>值2</td></tr></table>';
+    }
+    previewStem();
+}
+
+// 图片上传
+function insertImage() {
+    document.getElementById('imgInput').click();
+}
+function insertImageToAnalysis() {
+    document.getElementById('imgInputAnalysis').click();
+}
+
+function getImgMode() {
+    return document.querySelector('input[name="imgMode"]:checked')?.value || 'standard';
+}
+function saveImgMode() {
+    // 当前模式选择已保存在radio
+}
+
+async function doUploadImage(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('mode', getImgMode());
+    const r = await fetch('/api/upload_image', {method:'POST', body:fd});
+    const d = await r.json();
+    if (d.ok) {
+        document.getElementById('stemEditor').value += `<img src="${d.url}" style="max-width:100%">`;
+        previewStem();
+        toast(`图片已上传（${d.mode==='standard'?'标准模式':'高清模式'}）`, 'success');
+    }
+    e.target.value = '';
+}
+
+async function doUploadImageAnalysis(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('mode', getImgMode());
+    const r = await fetch('/api/upload_image', {method:'POST', body:fd});
+    const d = await r.json();
+    if (d.ok) {
+        const t = document.getElementById('analysisEditor');
+        const start = t.selectionStart, end = t.selectionEnd;
+        const img = `<img src="${d.url}" style="max-width:100%">`;
+        t.value = t.value.slice(0,start) + img + t.value.slice(end);
+        previewAnalysis();
+        toast('图片已插入解析','success');
+    }
+    e.target.value = '';
+}
+
+function insertCodeBlock() {
+    const t = document.getElementById('stemEditor');
+    t.value += '\n<pre>\n# 代码示例\nfor i in range(10):\n    print(i)\n</pre>\n';
+    previewStem();
+}
+
+function insertLatex() {
+    const t = document.getElementById('stemEditor');
+    t.value += '$$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$$';
+    previewStem();
+}
+
+function insertMermaid() {
+    const t = document.getElementById('stemEditor');
+    t.value += '\n<pre class="mermaid">\ngraph TD\n    A[开始] --> B{条件判断}\n    B -->|是| C[执行A]\n    B -->|否| D[执行B]\n    C --> E[结束]\n    D --> E\n</pre>\n';
+    previewStem();
+}
+
+function wrapSelection(fieldId, before, after) {
+    const t = document.getElementById(fieldId);
+    const start = t.selectionStart, end = t.selectionEnd;
+    const sel = t.value.slice(start, end) || '文本';
+    t.value = t.value.slice(0,start) + before + sel + after + t.value.slice(end);
+    if (fieldId === 'analysisEditor') previewAnalysis();
+    else previewStem();
+}
+
+function previewStem() {
+    const html = document.getElementById('stemEditor').value;
+    renderStemPreview(html, document.getElementById('stemPreview'));
+    updateLivePreview();
+}
+
+function previewAnalysis() {
+    const html = document.getElementById('analysisEditor').value;
+    renderStemPreview(html, document.getElementById('analysisPreview'));
+}
+
+function updateLivePreview() {
+    const type = document.getElementById('qType').value;
+    const stem = document.getElementById('stemEditor').value;
+    const opts = {};
+    document.querySelectorAll('.opt-input').forEach(i=>opts[i.dataset.key] = i.value);
+    const correct = document.querySelector('input[name="correctOpt"]:checked')?.value;
+    let html = `<div class="q-item"><div>`;
+    html += `<div>${stem || '<em class="text-muted">（题干）</em>'}</div>`;
+    if (type === 'single_choice') {
+        html += '<div class="q-options">';
+        ['A','B','C','D'].forEach(k=>{
+            html += `<div>${k}. ${opts[k]||'...'}</div>`;
+        });
+        html += '</div>';
+        if (correct) html += `<div class="text-success mt-1"><b>答案：</b>${correct}</div>`;
+    }
+    html += '</div></div>';
+    document.getElementById('livePreview').innerHTML = html;
+    renderStemPreview(html, document.getElementById('livePreview'));
+}
+
+// 加载已有试题
+async function loadQuestion() {
+    const q = await api(`/api/questions/${qid}`);
+    document.getElementById('qType').value = q.type;
+    document.getElementById('qKp').value = q.kp_id || '';
+    document.getElementById('qDiff').value = q.difficulty;
+    document.getElementById('qScore').value = q.score;
+    document.getElementById('qSource').value = q.source || '';
+    document.getElementById('qYear').value = q.year || '';
+    document.getElementById('stemEditor').value = q.stem || '';
+    document.getElementById('analysisEditor').value = q.analysis || '';
+    // 选项
+    try {
+        const opts = typeof q.options === 'string' ? JSON.parse(q.options) : (q.options||{});
+        Object.entries(opts).forEach(([k,v])=>{
+            const inp = document.querySelector(`.opt-input[data-key="${k}"]`);
+            if (inp) inp.value = v;
+        });
+        const ans = typeof q.answer === 'string' ? q.answer : '';
+        if (ans) {
+            const radio = document.querySelector(`input[name="correctOpt"][value="${ans}"]`);
+            if (radio) radio.checked = true;
+        }
+    } catch(e) {}
+    // 填空
+    try {
+        blanks = typeof q.blanks === 'string' ? JSON.parse(q.blanks) : (q.blanks||[]);
+        blankSeq = blanks.length;
+        renderBlanks();
+    } catch(e) {}
+    // 代码
+    if (editor && codeFillTypes.includes(q.type)) {
+        editor.getModel().setValue(q.stem || '');
+    }
+    // 标签
+    selectedTagIds = (q.tags||[]).map(t=>t.id);
+    document.getElementById('selectedTagNames').textContent = selectedTagIds.length ? `(${selectedTagIds.length}个)` : '';
+    document.getElementById('pageTitle').textContent = '编辑试题 #' + qid;
+    onTypeChange();
+    previewStem();
+    previewAnalysis();
+}
+
+// 保存试题
+async function saveQuestion() {
+    const type = document.getElementById('qType').value;
+    const stem = document.getElementById('stemEditor').value;
+    const opts = {};
+    document.querySelectorAll('.opt-input').forEach(i=>opts[i.dataset.key] = i.value);
+    const correct = document.querySelector('input[name="correctOpt"]:checked')?.value || '';
+    let answer = '';
+    if (type === 'single_choice') answer = correct;
+    else if (codeFillTypes.includes(type)) answer = JSON.stringify(blanks.map(b=>({id:b.id, answer:b.answer})));
+    else answer = correct;
+
+    const data = {
+        type,
+        stem,
+        options: opts,
+        answer,
+        blanks: codeFillTypes.includes(type) ? blanks : [],
+        analysis: document.getElementById('analysisEditor').value,
+        difficulty: parseInt(document.getElementById('qDiff').value),
+        score: parseFloat(document.getElementById('qScore').value),
+        kp_id: document.getElementById('qKp').value || null,
+        source: document.getElementById('qSource').value,
+        year: document.getElementById('qYear').value,
+        tag_ids: selectedTagIds,
+        attachments: []
+    };
+    try {
+        let r;
+        if (qid) {
+            r = await api(`/api/questions/${qid}`, {method:'PUT', body:data});
+        } else {
+            r = await api('/api/questions', {method:'POST', body:data});
+            qid = r.id;
+            document.getElementById('qid').value = qid;
+            document.getElementById('pageTitle').textContent = '编辑试题 #' + qid;
+        }
+        toast('保存成功','success');
+        // 清除草稿
+        if (draftSave) draftSave.clear();
+    } catch(e) {
+        toast('保存失败：'+e.message,'error');
+    }
+}
+
+// 监听输入实时预览
+document.getElementById('stemEditor').addEventListener('input', ()=>{ previewStem(); updateLivePreview(); });
+document.querySelectorAll('.opt-input').forEach(i=>i.addEventListener('input', updateLivePreview));
+document.querySelectorAll('input[name="correctOpt"]').forEach(i=>i.addEventListener('change', updateLivePreview));
+
+// 初始化
+loadKpOptions();
+loadTags();
+onTypeChange();
+
+// LocalStorage 草稿自动保存（每分钟）
+const draftSave = new DraftAutoSave('draft_question', ()=>{
+    if (!document.getElementById('stemEditor').value && blanks.length === 0) return null;
+    return {
+        type: document.getElementById('qType').value,
+        stem: document.getElementById('stemEditor').value,
+        options: Object.fromEntries(Array.from(document.querySelectorAll('.opt-input')).map(i=>[i.dataset.key, i.value])),
+        correct: document.querySelector('input[name="correctOpt"]:checked')?.value,
+        blanks, code: editor ? editor.getValue() : '',
+        analysis: document.getElementById('analysisEditor').value,
+        difficulty: document.getElementById('qDiff').value,
+        score: document.getElementById('qScore').value
+    };
+}, (data)=>{
+    document.getElementById('qType').value = data.type;
+    document.getElementById('stemEditor').value = data.stem;
+    Object.entries(data.options||{}).forEach(([k,v])=>{
+        const inp = document.querySelector(`.opt-input[data-key="${k}"]`);
+        if (inp) inp.value = v;
+    });
+    if (data.correct) {
+        const r = document.querySelector(`input[name="correctOpt"][value="${data.correct}"]`);
+        if (r) r.checked = true;
+    }
+    blanks = data.blanks || [];
+    blankSeq = blanks.length;
+    renderBlanks();
+    if (editor) editor.setValue(data.code || '');
+    document.getElementById('analysisEditor').value = data.analysis || '';
+    document.getElementById('qDiff').value = data.difficulty || 3;
+    document.getElementById('qScore').value = data.score || 2;
+    onTypeChange();
+    previewStem();
+    previewAnalysis();
+});
+draftSave.start();
+</script>
+{% endblock %}

@@ -1,0 +1,141 @@
+:root{
+    --bg:#f5f7fa; --panel:#fff; --ink:#1f2933; --muted:#627d98;
+    --primary:#2b6cb0; --primary-dark:#1e4e8c; --accent:#c05621;
+    --line:#e4e7eb; --success:#2f855a; --danger:#c53030; --warn:#b7791f;
+    --code-bg:#1e1e1e; --code-ink:#d4d4d4;
+}
+*{box-sizing:border-box}
+body{font-family:"Noto Sans SC","Microsoft YaHei",sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:14px}
+.app-layout{display:flex;min-height:100vh}
+.sidebar{width:240px;background:#1a365d;color:#cbd5e0;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:100}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:18px 16px;border-bottom:1px solid #2c5282}
+.sidebar-logo i{font-size:28px;color:#f6ad55}
+.logo-title{font-weight:600;font-size:16px;color:#fff}
+.logo-sub{font-size:11px;color:#a0aec0}
+.sidebar-nav{flex:1;overflow-y:auto;padding:8px 0}
+.sidebar-nav a{display:flex;align-items:center;gap:10px;padding:10px 18px;color:#cbd5e0;text-decoration:none;font-size:14px;border-left:3px solid transparent;transition:all .15s}
+.sidebar-nav a:hover{background:#2c5282;color:#fff}
+.sidebar-nav a.active{background:#2c5282;color:#fff;border-left-color:#f6ad55}
+.sidebar-nav a i{font-size:16px;width:18px}
+.sidebar-foot{padding:12px 18px;border-top:1px solid #2c5282;color:#718096;font-size:11px}
+.main-area{flex:1;margin-left:240px;padding:24px;min-width:0}
+
+/* 页面头部 */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:20px;font-weight:600;margin:0;color:var(--ink)}
+.page-sub{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* 卡片 */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.02)}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:16px}
+
+/* 按钮 */
+.btn-primary{background:var(--primary);border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-dark);border-color:var(--primary-dark)}
+
+/* 表格 */
+.table{margin:0;font-size:13px}
+.table th{background:#f7fafc;font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.table td{vertical-align:middle}
+
+/* 标签 */
+.tag-pill{display:inline-block;padding:2px 8px;background:#edf2f7;color:#4a5568;border-radius:10px;font-size:11px;margin-right:4px;margin-bottom:4px}
+.tag-pill.colored{color:#fff}
+
+/* 表单 */
+.form-label{font-weight:500;color:#4a5568;font-size:13px;margin-bottom:6px}
+.form-control,.form-select{font-size:13px}
+.form-control:focus,.form-select:focus{border-color:var(--primary);box-shadow:0 0 0 .2rem rgba(43,108,176,.15)}
+
+/* 工具栏 */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.toolbar .form-control,.toolbar .form-select{width:auto;min-width:160px}
+
+/* 搜索高亮 */
+.search-hit{background:#fff3cd;padding:0 2px;border-radius:2px;font-family:Consolas,monospace;color:#c05621;font-weight:600}
+
+/* 难度星星 */
+.diff-stars{color:#f6ad55;letter-spacing:1px}
+
+/* 题干预览 */
+.stem-preview{padding:8px 12px;background:#f7fafc;border-radius:6px;border-left:3px solid var(--primary);font-size:13px;line-height:1.7;max-height:120px;overflow-y:auto}
+.stem-preview img{max-width:100%;max-height:200px}
+.stem-preview pre{background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;font-family:Consolas,monospace;font-size:12px;overflow-x:auto}
+
+/* 代码块 */
+.code-block{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;font-family:Consolas,monospace;font-size:13px;line-height:1.5;overflow-x:auto;white-space:pre}
+.code-block .blank{display:inline-block;min-width:80px;border-bottom:2px solid #f6ad55;color:#f6ad55;text-align:center;background:rgba(246,173,85,.1);padding:0 4px;border-radius:2px;margin:0 2px}
+
+/* Monaco */
+#monacoEditor{height:360px;border:1px solid var(--line);border-radius:6px}
+
+/* 填空管理面板 */
+.blank-manager{background:#f7fafc;border:1px solid var(--line);border-radius:6px;padding:12px}
+.blank-item{display:grid;grid-template-columns:60px 1fr 80px 32px;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#fff;border-radius:4px;border-left:3px solid var(--accent)}
+.blank-item input{font-size:13px}
+
+/* 预览模式 */
+.preview-fit{max-width:100%}
+.preview-100{transform-origin:top center}
+.preview-double{column-count:2;column-gap:40px}
+
+/* 试卷预览 */
+.paper-preview{background:#fff;padding:50px;box-shadow:0 2px 12px rgba(0,0,0,.1);max-width:780px;margin:0 auto;font-family:'Times New Roman','宋体',serif;font-size:14px;line-height:1.8}
+.paper-preview h1{font-size:24px;text-align:center;margin-bottom:8px;font-family:'黑体',sans-serif}
+.paper-preview h2{font-size:16px;margin-top:18px;margin-bottom:8px;font-family:'黑体',sans-serif;border-bottom:1px solid #999;padding-bottom:4px}
+.paper-preview .meta{text-align:center;color:#666;font-size:13px;margin-bottom:16px}
+.paper-preview .seal{position:absolute;left:20px;top:200px;writing-mode:vertical-rl;color:#999;font-size:11px;letter-spacing:8px;border-left:1px dashed #999;padding-left:4px}
+.paper-preview .student-info{margin:12px 0;font-size:13px;border:1px solid #ccc;padding:8px;border-radius:4px}
+.paper-preview .score-box{margin:16px 0;border:1px solid #333}
+.paper-preview .score-box table{width:100%;border-collapse:collapse}
+.paper-preview .score-box td{border:1px solid #333;text-align:center;padding:6px;font-size:12px}
+.paper-preview .q-item{margin:10px 0}
+.paper-preview .q-options{margin:6px 0 6px 24px;font-size:13px}
+.paper-preview .q-options div{margin:2px 0}
+.paper-preview code{font-family:Consolas,monospace;background:#f4f4f4;padding:1px 4px;border-radius:2px;font-size:12px}
+.paper-preview pre{background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;font-family:Consolas,monospace;font-size:12px;overflow-x:auto;margin:6px 0}
+.paper-preview .fill-blank{display:inline-block;min-width:80px;border-bottom:1px solid #333;margin:0 4px}
+
+/* 雷达图容器 */
+.chart-box{height:320px}
+
+/* 知识点树 */
+.kp-tree-node{padding:4px 8px;cursor:pointer;border-radius:4px;font-size:13px}
+.kp-tree-node:hover{background:#edf2f7}
+.kp-tree-node.selected{background:#bee3f8}
+.kp-tree-node .badge-book{font-size:10px;margin-left:6px}
+
+/* 草稿恢复弹窗 */
+.draft-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:9999}
+.draft-modal.show{display:flex}
+.draft-modal .modal-box{background:#fff;border-radius:8px;padding:24px;max-width:500px;width:90%}
+
+/* 状态徽章 */
+.badge-status{font-size:11px;padding:3px 8px;border-radius:4px}
+
+/* 操作按钮组 */
+.action-btns{display:flex;gap:4px}
+.action-btns .btn{padding:2px 8px;font-size:12px}
+
+/* 试卷编辑器 */
+.paper-builder{display:grid;grid-template-columns:1fr 320px;gap:16px}
+.paper-section{margin-bottom:16px;padding:12px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.paper-section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.paper-q-item{display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:4px;background:#f7fafc;margin-bottom:6px}
+.paper-q-item:hover{background:#edf2f7}
+.paper-q-item .q-num{font-weight:600;min-width:30px}
+.paper-q-item .q-stem{flex:1;font-size:13px;max-height:80px;overflow:hidden}
+.paper-q-item .q-actions{display:flex;flex-direction:column;gap:4px}
+
+/* 草稿保存指示器 */
+.draft-indicator{position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,.7);color:#fff;padding:6px 12px;border-radius:16px;font-size:11px;z-index:9999;display:none}
+.draft-indicator.show{display:block}
+
+/* 响应式 */
+@media (max-width:992px){
+    .sidebar{transform:translateX(-100%);transition:transform .3s}
+    .sidebar.show{transform:translateX(0)}
+    .main-area{margin-left:0}
+    .paper-builder{grid-template-columns:1fr}
+}

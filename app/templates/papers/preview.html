@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block title %}试卷预览{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">试卷预览</h1>
+        <div class="page-sub">适应宽度 / 100%实际大小 / 双页并排 · Word导出 · 答题卡 · 统计分析</div>
+    </div>
+    <div class="d-flex gap-2">
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary" onclick="setView('fit')" id="viewFit">适应宽度</button>
+            <button class="btn btn-outline-secondary" onclick="setView('100')" id="view100">100%</button>
+            <button class="btn btn-outline-secondary" onclick="setView('double')" id="viewDouble">双页并排</button>
+        </div>
+        <button class="btn btn-outline-info" onclick="showCoverage()"><i class="bi bi-graph-up"></i> 覆盖分析</button>
+        <button class="btn btn-outline-secondary" onclick="window.open('/api/papers/'+pid+'/answer_sheet?pages=single')"><i class="bi bi-card-text"></i> 单页答题卡</button>
+        <button class="btn btn-outline-secondary" onclick="window.open('/api/papers/'+pid+'/answer_sheet?pages=double')"><i class="bi bi-card-text"></i> 双页答题卡</button>
+        <button class="btn btn-outline-success" onclick="window.open('/api/papers/'+pid+'/export_docx?answer=1')"><i class="bi bi-file-earmark-word"></i> 导出答案</button>
+        <button class="btn btn-primary" onclick="window.open('/api/papers/'+pid+'/export_docx')"><i class="bi bi-download"></i> 导出试卷Word</button>
+    </div>
+</div>
+
+<input type="hidden" id="pid" value="{{pid}}">
+<div id="previewContainer" class="preview-fit">
+    <div class="paper-preview" id="paperPreview">
+        <div class="text-center text-muted py-4">加载中...</div>
+    </div>
+</div>
+
+<!-- 覆盖分析弹窗 -->
+<div class="modal fade" id="coverageModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">教材覆盖与核心素养分析</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+          <div class="row g-3">
+              <div class="col-md-6">
+                  <h6>各教材覆盖率</h6>
+                  <div id="bookCoverage" style="max-height:300px;overflow-y:auto"></div>
+              </div>
+              <div class="col-md-6">
+                  <h6>核心素养雷达图</h6>
+                  <div id="radarChart" style="height:300px"></div>
+              </div>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+const pid = document.getElementById('pid').value;
+
+async function loadPaper() {
+    const p = await api(`/api/papers/${pid}`);
+    const qs = p.questions || [];
+    let html = '';
+    // 标题
+    html += `<h1>${esc(p.title)}</h1>`;
+    html += `<div class="meta">（满分${p.total_score}分 ${p.mode==='xuekao'?'学考':'选考'}）</div>`;
+    // 考生信息区
+    if (p.student_info) html += `<div class="student-info">${esc(p.student_info)}</div>`;
+    // 计分框
+    const bigNos = [...new Set(qs.map(q=>q.big_no))].sort((a,b)=>a-b);
+    if (bigNos.length) {
+        html += '<div class="score-box"><table><tr><td>题号</td>';
+        bigNos.forEach(n=>html += `<td>第${n}题</td>`);
+        html += '</tr><tr><td>得分</td>';
+        bigNos.forEach(()=>html += '<td></td>');
+        html += '</tr></table></div>';
+    }
+    // 题目
+    let curBig = null;
+    qs.forEach(pq=>{
+        if (pq.big_no !== curBig) {
+            curBig = pq.big_no;
+            html += `<h2>${esc(pq.section_title||'第'+curBig+'题')}</h2>`;
+            if (pq.section_desc) html += `<div class="text-muted small mb-2">${esc(pq.section_desc)}</div>`;
+        }
+        const noLabel = pq.custom_no || (pq.small_no ? `(${pq.small_no})` : '');
+        html += `<div class="q-item"><div><b>${noLabel}</b> `;
+        // 题干
+        html += pq.q_stem || '';
+        // 选项
+        if (pq.q_type === 'single_choice') {
+            try {
+                const opts = JSON.parse(pq.q_options||'{}');
+                html += '<div class="q-options">';
+                ['A','B','C','D'].forEach(k=>{
+                    if (opts[k]) html += `<div>${k}. ${opts[k]}</div>`;
+                });
+                html += '</div>';
+            } catch(e) {}
+        }
+        // 分值
+        html += ` <span class="text-muted small">（${pq.score}分）</span>`;
+        html += '</div></div>';
+    });
+    document.getElementById('paperPreview').innerHTML = html;
+    // 渲染MathJax
+    if (window.MathJax) MathJax.typesetPromise([document.getElementById('paperPreview')]).catch(()=>{});
+    // 渲染Mermaid
+    document.querySelectorAll('#paperPreview pre.mermaid, #paperPreview code.language-mermaid').forEach(el=>{
+        try { mermaid.run({nodes:[el]}); } catch(e) {}
+    });
+}
+
+function setView(mode) {
+    const c = document.getElementById('previewContainer');
+    const p = document.getElementById('paperPreview');
+    ['preview-fit','preview-100','preview-double'].forEach(cls=>c.classList.remove(cls));
+    document.getElementById('viewFit').classList.remove('active','btn-secondary');
+    document.getElementById('view100').classList.remove('active','btn-secondary');
+    document.getElementById('viewDouble').classList.remove('active','btn-secondary');
+    if (mode==='fit') {
+        c.classList.add('preview-fit');
+        p.style.transform = 'scale(1)';
+        document.getElementById('viewFit').classList.add('active','btn-secondary');
+    } else if (mode==='100') {
+        c.classList.add('preview-100');
+        p.style.transform = 'scale(1)';
+        p.style.width = '780px';
+        document.getElementById('view100').classList.add('active','btn-secondary');
+    } else {
+        c.classList.add('preview-double');
+        p.style.transform = 'scale(1)';
+        p.style.width = '100%';
+        p.style.maxWidth = '1200px';
+        document.getElementById('viewDouble').classList.add('active','btn-secondary');
+    }
+}
+
+async function showCoverage() {
+    const d = await api(`/api/stats/paper_coverage/${pid}`);
+    // 教材覆盖
+    const el = document.getElementById('bookCoverage');
+    el.innerHTML = d.book_coverage.map(b=>{
+        const pct = (b.rate*100).toFixed(1);
+        const color = b.rate>0.5?'success':(b.rate>0.2?'warning':'danger');
+        return `
+            <div class="mb-2">
+                <div class="d-flex justify-content-between">
+                    <span>${b.book}</span>
+                    <span class="text-${color}">${b.covered}/${b.total_kp} (${pct}%)</span>
+                </div>
+                <div class="progress" style="height:6px">
+                    <div class="progress-bar bg-${color}" style="width:${pct}%"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    // 雷达图
+    const radar = echarts.init(document.getElementById('radarChart'));
+    radar.setOption({
+        tooltip:{},
+        radar:{
+            indicator: d.abilities_radar.map(a=>({name:a.name, max:100}))
+        },
+        series:[{
+            type:'radar',
+            areaStyle:{opacity:0.3},
+            data:[{value:d.abilities_radar.map(a=>a.value), name:'核心素养'}]
+        }]
+    });
+    new bootstrap.Modal(document.getElementById('coverageModal')).show();
+}
+
+loadPaper();
+</script>
+{% endblock %}

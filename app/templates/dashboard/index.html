@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}工作台 - 个人题库与试卷管理系统{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">工作台</h1>
+        <div class="page-sub">浙江省高中信息技术学科 · 单人教师专属版 V3.0</div>
+    </div>
+</div>
+
+<!-- 顶部统计卡片 -->
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3"><i class="bi bi-collection fs-1 text-primary"></i></div>
+                <div>
+                    <div class="text-muted small">题库总量</div>
+                    <div class="h3 mb-0" id="statTotal">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3"><i class="bi bi-file-earmark-text fs-1 text-success"></i></div>
+                <div>
+                    <div class="text-muted small">已组试卷</div>
+                    <div class="h3 mb-0" id="statPapers">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3"><i class="bi bi-diagram-3 fs-1 text-info"></i></div>
+                <div>
+                    <div class="text-muted small">教材覆盖</div>
+                    <div class="h3 mb-0" id="statBooks">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3"><i class="bi bi-exclamation-triangle fs-1 text-warning"></i></div>
+                <div>
+                    <div class="text-muted small">知识点盲区</div>
+                    <div class="h3 mb-0" id="statBlind">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- 各题型分布 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">各题型题量分布</div>
+            <div class="card-body">
+                <div id="typeChart" class="chart-box"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 各教材分布 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">各教材题量分布</div>
+            <div class="card-body">
+                <div id="bookChart" class="chart-box"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 技术栈分布 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">技术栈/算法题量分布</div>
+            <div class="card-body">
+                <div id="tagChart" class="chart-box"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 知识点盲区 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">知识点覆盖盲区
+                <span class="text-muted small">（下列知识点暂无题目）</span>
+            </div>
+            <div class="card-body" style="max-height:320px;overflow-y:auto">
+                <div id="blindList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快捷入口 -->
+<div class="row g-3 mt-1">
+    <div class="col-md-4">
+        <a href="/questions/new" class="card text-decoration-none">
+            <div class="card-body text-center">
+                <i class="bi bi-plus-circle fs-1 text-primary"></i>
+                <div class="mt-2 text-dark">录入新试题</div>
+                <small class="text-muted">支持代码填空、Pandas表格、流程图</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="/papers/new" class="card text-decoration-none">
+            <div class="card-body text-center">
+                <i class="bi bi-magic fs-1 text-success"></i>
+                <div class="mt-2 text-dark">智能组卷</div>
+                <small class="text-muted">学考/选考模板一键生成</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="/tags" class="card text-decoration-none">
+            <div class="card-body text-center">
+                <i class="bi bi-diagram-3 fs-1 text-info"></i>
+                <div class="mt-2 text-dark">维护知识点树</div>
+                <small class="text-muted">增量更新 · 自定义保留</small>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+async function loadStats() {
+    const d = await api('/api/stats/overview');
+    document.getElementById('statTotal').textContent = d.total;
+    document.getElementById('statPapers').textContent = d.paper_count;
+    const booksCovered = d.by_book.filter(b=>b.book && b.cnt>0).length;
+    document.getElementById('statBooks').textContent = `${booksCovered}/5`;
+    document.getElementById('statBlind').textContent = d.uncovered_kps.length;
+
+    // 题型柱状图
+    const typeChart = echarts.init(document.getElementById('typeChart'));
+    const typeData = d.by_type.map(t=>({
+        name: Q_TYPE[t.type]||t.type,
+        value: t.cnt
+    }));
+    typeChart.setOption({
+        tooltip:{trigger:'axis'},
+        grid:{left:'8%',right:'5%',bottom:'10%',top:'5%'},
+        xAxis:{type:'category',data:typeData.map(x=>x.name),axisLabel:{rotate:30,fontSize:11}},
+        yAxis:{type:'value'},
+        series:[{type:'bar',data:typeData.map(x=>x.value),itemStyle:{color:'#2b6cb0'}}]
+    });
+
+    // 教材饼图
+    const bookChart = echarts.init(document.getElementById('bookChart'));
+    const bookData = d.by_book.filter(b=>b.book).map(b=>({name:b.book, value:b.cnt}));
+    bookChart.setOption({
+        tooltip:{trigger:'item'},
+        legend:{bottom:0,textStyle:{fontSize:11}},
+        series:[{
+            type:'pie', radius:['40%','70%'],
+            data:bookData,
+            label:{formatter:'{b}: {c}'}
+        }]
+    });
+
+    // 技术栈
+    const tagChart = echarts.init(document.getElementById('tagChart'));
+    tagChart.setOption({
+        tooltip:{trigger:'axis'},
+        grid:{left:'15%',right:'5%',bottom:'5%',top:'5%'},
+        xAxis:{type:'value'},
+        yAxis:{type:'category',data:d.by_tag.map(t=>t.name)},
+        series:[{
+            type:'bar',
+            data:d.by_tag.map(t=>({value:t.cnt, itemStyle:{color:t.color}})),
+            label:{show:true,position:'right'}
+        }]
+    });
+
+    // 盲区列表
+    const blind = document.getElementById('blindList');
+    if (d.uncovered_kps.length === 0) {
+        blind.innerHTML = '<div class="text-success"><i class="bi bi-check-circle"></i> 已覆盖所有知识点</div>';
+    } else {
+        blind.innerHTML = d.uncovered_kps.map(k=>`
+            <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                <span><span class="badge bg-secondary">${k.book||'未分类'}</span> ${k.name}</span>
+            </div>
+        `).join('');
+    }
+}
+loadStats();
+window.addEventListener('resize',()=>{
+    document.querySelectorAll('.chart-box').forEach(c=>{
+        const inst = echarts.getInstanceByDom(c);
+        if (inst) inst.resize();
+    });
+});
+</script>
+{% endblock %}
